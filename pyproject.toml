@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "t2s-agent"
+version = "0.1.0"
+description = "Text-to-SQL agent with schema linking, a read-only safety layer, one self-correction round, and an evaluation harness that scores by execution accuracy. Standard library only."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Ranjeet Yadav" }]
+keywords = ["text-to-sql", "llm", "agents", "sqlite", "evaluation", "schema-linking"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Topic :: Database :: Front-Ends",
+]
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[project.scripts]
+t2s = "t2s.__main__:main"
+
+[tool.setuptools.packages.find]
+include = ["t2s*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = [".", "tests"]
