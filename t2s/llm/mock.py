@@ -268,35 +268,37 @@ def _parts_cost_per_ticket(_m):
 
 
 # --- join -----------------------------------------------------------------------------
-@_rule(r"technicians who closed tickets for customers in ([a-z ]+?)\s*$")
+@_rule(r"technicians who closed tickets for customers in ([a-z ]+?)\s*$"
+       r"|which technicians handled closed tickets for ([a-z ]+?) customers")
 def _techs_closed_for_city(m):
     return ("SELECT DISTINCT t.technician_id, t.name FROM technicians t "
             "JOIN service_tickets st ON t.technician_id = st.technician_id "
             "JOIN equipment e ON st.equipment_id = e.equipment_id "
             "JOIN customers c ON e.customer_id = c.customer_id "
-            f"WHERE c.city = '{_title(m.group(1))}' AND st.status = 'closed'")
+            f"WHERE c.city = '{_title(m.group(1) or m.group(2))}' AND st.status = 'closed'")
 
 
-@_rule(r"equipment belonging to customers in the ([a-z_]+) segment")
+@_rule(r"equipment belonging to customers in the ([a-z_]+) segment"
+       r"|which machines do ([a-z_]+) customers own")
 def _equipment_by_segment(m):
     return ("SELECT e.equipment_id, e.model FROM equipment e "
             "JOIN customers c ON e.customer_id = c.customer_id "
-            f"WHERE c.segment = '{m.group(1)}'")
+            f"WHERE c.segment = '{m.group(1) or m.group(2)}'")
 
 
-@_rule(r"tickets for equipment model (.+?)\s*$")
+@_rule(r"tickets for equipment model (.+?)\s*$|show tickets raised against (.+?) units")
 def _tickets_for_model(m):
     return ("SELECT st.ticket_id, e.model FROM service_tickets st "
             "JOIN equipment e ON st.equipment_id = e.equipment_id "
-            f"WHERE e.model = '{_model_case(m.group(1))}'")
+            f"WHERE e.model = '{_model_case(m.group(1) or m.group(2))}'")
 
 
-@_rule(r"parts used on tickets with priority ([a-z]+)")
+@_rule(r"parts used on tickets with priority ([a-z]+)|which parts went into ([a-z]+) priority tickets")
 def _parts_by_priority(m):
     return ("SELECT DISTINCT p.part_id, p.name FROM parts p "
             "JOIN ticket_parts tp ON p.part_id = tp.part_id "
             "JOIN service_tickets st ON tp.ticket_id = st.ticket_id "
-            f"WHERE st.priority = '{m.group(1)}'")
+            f"WHERE st.priority = '{m.group(1) or m.group(2)}'")
 
 
 @_rule(r"customers whose equipment had an? ([a-z]+) priority ticket")
@@ -316,24 +318,28 @@ def _techs_for_model(m):
 
 
 # --- date range -----------------------------------------------------------------------
-@_rule(r"tickets opened between (\d{4}-\d{2}-\d{2}) and (\d{4}-\d{2}-\d{2})")
+@_rule(r"tickets opened between (\d{4}-\d{2}-\d{2}) and (\d{4}-\d{2}-\d{2})"
+       r"|tickets raised from (\d{4}-\d{2}-\d{2}) to (\d{4}-\d{2}-\d{2})")
 def _tickets_between(m):
+    lo = m.group(1) or m.group(3)
+    hi = m.group(2) or m.group(4)
     return ("SELECT ticket_id, opened_at FROM service_tickets "
-            f"WHERE opened_at >= '{m.group(1)}' AND opened_at <= '{m.group(2)}'")
+            f"WHERE opened_at >= '{lo}' AND opened_at <= '{hi}'")
 
 
-@_rule(r"parts used on tickets closed in the last quarter of (\d{4})")
+@_rule(r"parts used on tickets closed in the last quarter of (\d{4})"
+       r"|parts consumed on tickets closed in q4 (\d{4})")
 def _parts_last_quarter(m):
-    y = m.group(1)
+    y = m.group(1) or m.group(2)
     return ("SELECT DISTINCT p.part_id, p.name FROM parts p "
             "JOIN ticket_parts tp ON p.part_id = tp.part_id "
             "JOIN service_tickets st ON tp.ticket_id = st.ticket_id "
             f"WHERE st.closed_at >= '{y}-10-01' AND st.closed_at < '{int(y)+1}-01-01'")
 
 
-@_rule(r"tickets closed in (\d{4})\s*$")
+@_rule(r"tickets closed in (\d{4})\s*$|which tickets were closed during (\d{4})")
 def _tickets_closed_in_year(m):
-    y = m.group(1)
+    y = m.group(1) or m.group(2)
     return ("SELECT ticket_id, closed_at FROM service_tickets "
             f"WHERE closed_at >= '{y}-01-01' AND closed_at < '{int(y)+1}-01-01'")
 
@@ -419,6 +425,12 @@ def _equipment_no_tickets(_m):
 def _parts_never_used(_m):
     return ("SELECT p.part_id, p.name FROM parts p WHERE NOT EXISTS ("
             "SELECT 1 FROM ticket_parts tp WHERE tp.part_id = p.part_id)")
+
+
+@_rule(r"customers without equipment")
+def _customers_without_equipment(_m):
+    return ("SELECT c.customer_id, c.name FROM customers c WHERE NOT EXISTS ("
+            "SELECT 1 FROM equipment e WHERE e.customer_id = c.customer_id)")
 
 
 # --- simple filter --------------------------------------------------------------------
