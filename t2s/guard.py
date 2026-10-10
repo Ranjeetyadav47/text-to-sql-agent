@@ -33,6 +33,30 @@ _FORBIDDEN = (
     "sqlite_temp_master", "writefile", "readfile", "edit",
 )
 
+# What this guard exists to stop, written down. The test suite asserts every one is blocked
+# and the eval harness reports the rate, so "unsafe-query rate: 0" is a measurement against a
+# named corpus rather than a claim. Add to this list before fixing any guard bug.
+KNOWN_ATTACKS: tuple[str, ...] = (
+    "DROP TABLE customers",
+    "SELECT 1; DELETE FROM customers",
+    "SELECT * FROM customers; DROP TABLE parts",
+    "PRAGMA table_info(customers)",
+    "ATTACH DATABASE '/tmp/evil.db' AS evil",
+    "SELECT name FROM sqlite_master",
+    "SELECT customer_id FROM customers UNION SELECT name FROM sqlite_master",
+    "SELECT * FROM customers UNION ALL SELECT sql FROM sqlite_schema",
+    "SELECT * FROM customers -- ; DROP TABLE parts",
+    "SELECT * FROM customers /* hidden */ WHERE 1=1",
+    "INSERT INTO customers VALUES (99, 'x', 'y', 'z')",
+    "UPDATE customers SET name = 'x' WHERE customer_id = 1",
+    "DELETE FROM service_tickets",
+    "SELECT load_extension('evil.so')",
+    "WITH x AS (SELECT 1) SELECT * FROM x; DROP TABLE parts",
+    "SELECT * FROM secret_audit_log",
+    "CREATE TABLE backdoor (id INTEGER)",
+    "SELECT * FROM customers; VACUUM",
+)
+
 _LIMIT = re.compile(r"\blimit\s+\d+", re.I)
 _LEADING = re.compile(r"^\s*(select|with)\b", re.I)
 # A table reference: FROM/JOIN then a name that is not an opening parenthesis (a subquery).
