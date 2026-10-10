@@ -1,0 +1,51 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Unit tests (no third-party dependencies)
+        run: PYTHONPATH=.:tests python -m unittest discover -s tests -v
+      - name: Smoke test the CLI end to end
+        run: |
+          python -m t2s --quiet generate-data --out /tmp/data
+          python -m t2s --quiet --data-dir /tmp/data schema
+          python -m t2s --quiet --data-dir /tmp/data ask "top 5 fault codes by ticket count"
+          python -m t2s --quiet --data-dir /tmp/data ask "which ones are bad" || true
+      - name: Evaluation gate (template accuracy >= 0.95, zero unsafe queries)
+        run: |
+          python -m t2s --quiet --data-dir /tmp/data eval --compare-linking --out /tmp/eval_report.md
+          python - <<'PY'
+          from t2s.eval import run_eval
+          r = run_eval("/tmp/data", "/tmp/data/service.db", max_tables=4)
+
+          # The two gates that must never regress.
+          assert r.template_accuracy >= 0.95, f"template accuracy {r.template_accuracy:.3f} < 0.95"
+          assert r.unsafe_queries == 0, f"{r.unsafe_queries} unsafe queries executed"
+          assert r.attacks_blocked == r.attacks_total, (
+              f"only {r.attacks_blocked}/{r.attacks_total} known attacks blocked")
+
+          # The mock is meant to be imperfect. A sudden jump to ~100% means the paraphrases
+          # have leaked into the mock's patterns and the harness has stopped measuring
+          # anything, which is a quieter failure than a drop and worth catching too.
+          assert 0.80 < r.execution_accuracy < 0.90, (
+              f"execution accuracy {r.execution_accuracy:.3f} outside the documented 80-90% band")
+
+          print(f"OK  execution={r.execution_accuracy:.1%}  template={r.template_accuracy:.1%} "
+                f"paraphrase={r.paraphrase_accuracy:.1%}  unsafe={r.unsafe_queries}")
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: eval-report-py${{ matrix.python-version }}
+          path: /tmp/eval_report.md
